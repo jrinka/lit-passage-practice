@@ -14,6 +14,8 @@ A small browser app for students to practice analyzing short extracts from publi
 
 Open `passages.html` in any modern web browser.
 
+Or use the live version: https://jrinka.github.io/lit-passage-practice/
+
 No installation or server is required.
 
 ## Files
