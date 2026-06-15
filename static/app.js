@@ -202,7 +202,7 @@ function extractPassage(text, minWords = 100, maxWords = 200) {
   if (minWords <= finalWc && finalWc <= maxWords) {
     return joined;
   }
-  return window.slice(0, Math.min(maxWords, window.length)).join(" ");
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ async function fetchBookText(bookId) {
 
   for (const url of urls) {
     try {
-      const resp = await fetch(url, { headers: { "User-Agent": "LitPassagePractice/1.0" } });
+      const resp = await fetch(url);
       if (!resp.ok) continue;
       const text = await resp.text();
       if (text.length < 500) continue;
@@ -293,7 +293,7 @@ async function getRandomPassage() {
 // Feedback
 // ---------------------------------------------------------------------------
 
-function evaluateFeedback(passage, response) {
+function evaluateFeedback(response) {
   const responseLower = response.toLowerCase();
   const wc = countWords(response);
 
@@ -374,6 +374,7 @@ const els = {
   exportBtn: document.getElementById("export-btn"),
   exportFormat: document.getElementById("export-format"),
   feedbackCard: document.getElementById("feedback-card"),
+  scoreRing: document.getElementById("score-ring"),
   scoreValue: document.getElementById("score-value"),
   rating: document.getElementById("rating"),
   checklist: document.getElementById("checklist"),
@@ -385,28 +386,35 @@ let currentFeedback = null;
 
 function setLoading(isLoading) {
   els.newPassageBtn.disabled = isLoading;
+  els.submitBtn.disabled = isLoading;
   if (isLoading) {
-    els.passageBox.innerHTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span></div>';
+    els.passageBox.classList.add("is-loading");
+    els.passageBox.innerHTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span><span></span></div>';
+  } else {
+    els.passageBox.classList.remove("is-loading");
   }
 }
 
 function renderPassage(data) {
-  if (!data) {
-    els.passageTitle.textContent = "Couldn't load a passage";
-    els.passageBox.textContent = "Please check your internet connection and try again.";
-    els.passageAuthor.textContent = "—";
-    els.passageWordCount.textContent = "— words";
-    els.sourceLink.href = "#";
-    currentPassage = null;
-    return;
-  }
-
-  currentPassage = data;
-  els.passageTitle.textContent = data.title;
-  els.passageBox.textContent = data.passage;
-  els.passageAuthor.textContent = data.author;
-  els.passageWordCount.textContent = `${data.word_count} words`;
-  els.sourceLink.href = data.source_url;
+  els.passageBox.style.opacity = '0';
+  setTimeout(() => {
+    if (!data) {
+      els.passageTitle.textContent = "Couldn't load a passage";
+      els.passageBox.textContent = "Please check your internet connection and try again.";
+      els.passageAuthor.textContent = "—";
+      els.passageWordCount.textContent = "— words";
+      els.sourceLink.href = "#";
+      currentPassage = null;
+    } else {
+      currentPassage = data;
+      els.passageTitle.textContent = data.title;
+      els.passageBox.textContent = data.passage;
+      els.passageAuthor.textContent = data.author;
+      els.passageWordCount.textContent = `${data.word_count} words`;
+      els.sourceLink.href = data.source_url;
+    }
+    els.passageBox.style.opacity = '1';
+  }, 150);
 }
 
 function renderFeedback(result) {
@@ -415,12 +423,27 @@ function renderFeedback(result) {
   els.scoreValue.textContent = `${result.passed}/${result.total}`;
   els.rating.textContent = result.rating;
 
+  const angle = (result.passed / result.total) * 360;
+  els.scoreRing.style.setProperty("--score-angle", `${angle}deg`);
+
+  els.feedbackCard.style.borderTopColor = result.rating === "Strong"
+    ? "var(--success)"
+    : result.rating === "Good"
+      ? "var(--warning)"
+      : "var(--danger)";
+
   els.checklist.innerHTML = "";
+  let delay = 0;
   for (const check of Object.values(result.checks)) {
     const li = document.createElement("li");
-    li.className = check.passed ? "check-pass" : "check-fail";
-    li.textContent = `${check.passed ? "✓" : "✗"} ${check.label}`;
+    li.className = check.passed ? "pass" : "fail";
+    li.style.animationDelay = `${delay}ms`;
+    li.innerHTML = `
+      <span class="check-icon" aria-hidden="true">${check.passed ? "✓" : "!"}</span>
+      <span class="check-label">${escapeHtml(check.label)}</span>
+    `;
     els.checklist.appendChild(li);
+    delay += 80;
   }
 
   const ul = els.suggestions.querySelector("ul");
@@ -430,6 +453,14 @@ function renderFeedback(result) {
     li.textContent = suggestion;
     ul.appendChild(li);
   }
+
+  els.feedbackCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 // ---------------------------------------------------------------------------
@@ -506,17 +537,40 @@ async function loadNewPassage() {
 }
 
 function handleSubmit() {
-  if (!currentPassage) return;
+  if (!currentPassage) {
+    alert("Please load a passage first.");
+    return;
+  }
   const response = els.responseInput.value.trim();
   if (!response) {
     alert("Write a short analysis before submitting.");
     return;
   }
-  const result = evaluateFeedback(currentPassage.passage, response);
-  renderFeedback(result);
+
+  els.submitBtn.disabled = true;
+  const originalText = els.submitBtn.innerHTML;
+  els.submitBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">⟳</span> Analyzing…';
+
+  setTimeout(() => {
+    try {
+      const result = evaluateFeedback(response);
+      renderFeedback(result);
+    } finally {
+      els.submitBtn.disabled = false;
+      els.submitBtn.innerHTML = originalText;
+    }
+  }, 0);
 }
 
 function handleExport() {
+  if (!currentPassage) {
+    alert("No passage to export. Load a passage first.");
+    return;
+  }
+  if (!currentFeedback) {
+    alert("Submit your analysis for feedback before exporting.");
+    return;
+  }
   const format = els.exportFormat.value;
   if (format === "markdown") {
     exportMarkdown();
