@@ -21,7 +21,7 @@ No installation or server is required.
 - `passages.html` — App layout.
 - `static/style.css` — App styling.
 - `static/app.js` — Frontend logic.
-- `static/passages.json` — Offline fallback passages.
+- `static/passages.json` — Offline fallback passages. Keep in sync with the inline fallback in `passages.html`.
 
 ## Notes
 

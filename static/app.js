@@ -238,8 +238,16 @@ async function fetchBookText(bookId) {
     }
   }
 
-  TEXT_CACHE[bookId] = null;
   return null;
+}
+
+function isValidPassage(p) {
+  return (
+    p &&
+    typeof p.title === "string" &&
+    typeof p.author === "string" &&
+    typeof p.passage === "string"
+  );
 }
 
 async function loadFallbackPassages() {
@@ -251,9 +259,10 @@ async function loadFallbackPassages() {
   const inline = document.getElementById("fallback-passages");
   if (inline) {
     try {
-      FALLBACK_PASSAGES = JSON.parse(inline.textContent);
-      if (Array.isArray(FALLBACK_PASSAGES) && FALLBACK_PASSAGES.length > 0) {
-        return;
+      const parsed = JSON.parse(inline.textContent);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        FALLBACK_PASSAGES = parsed.filter(isValidPassage);
+        if (FALLBACK_PASSAGES.length > 0) return;
       }
     } catch (err) {
       console.error("Failed to parse inline fallback passages", err);
@@ -264,7 +273,10 @@ async function loadFallbackPassages() {
   try {
     const resp = await fetch("static/passages.json");
     if (resp.ok) {
-      FALLBACK_PASSAGES = await resp.json();
+      const parsed = await resp.json();
+      if (Array.isArray(parsed)) {
+        FALLBACK_PASSAGES = parsed.filter(isValidPassage);
+      }
     }
   } catch (err) {
     console.error("Failed to load fallback passages", err);
@@ -405,6 +417,7 @@ const els = {
 
 let currentPassage = null;
 let currentFeedback = null;
+let renderPassageTimeout = null;
 
 function setLoading(isLoading) {
   els.newPassageBtn.disabled = isLoading;
@@ -418,6 +431,11 @@ function setLoading(isLoading) {
 }
 
 function renderPassage(data) {
+  if (renderPassageTimeout) {
+    clearTimeout(renderPassageTimeout);
+    renderPassageTimeout = null;
+  }
+
   if (!data) {
     currentPassage = null;
   } else {
@@ -425,7 +443,8 @@ function renderPassage(data) {
   }
 
   els.passageBox.style.opacity = '0';
-  setTimeout(() => {
+  renderPassageTimeout = setTimeout(() => {
+    renderPassageTimeout = null;
     if (!data) {
       els.passageTitle.textContent = "Couldn't load a passage";
       els.passageBox.textContent = "Please check your internet connection and try again.";
