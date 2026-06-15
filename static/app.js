@@ -1,239 +1,541 @@
-(() => {
-    // DOM elements
-    const passageBox = document.getElementById('passage-box');
-    const passageTitle = document.getElementById('passage-title');
-    const passageAuthor = document.getElementById('passage-author');
-    const passageWordCount = document.getElementById('passage-word-count');
-    const sourceLink = document.getElementById('source-link');
-    const newPassageBtn = document.getElementById('new-passage-btn');
+/**
+ * Lit Passage Practice — static client-side app.
+ *
+ * Fetches public-domain classics from Project Gutenberg and runs a
+ * lightweight rubric check on the user's analysis. Falls back to bundled
+ * passages if live fetching fails.
+ */
 
-    const responseInput = document.getElementById('response-input');
-    const responseWordCount = document.getElementById('response-word-count');
-    const submitBtn = document.getElementById('submit-btn');
-    const exportBtn = document.getElementById('export-btn');
-    const exportFormat = document.getElementById('export-format');
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
 
-    const feedbackCard = document.getElementById('feedback-card');
-    const ratingEl = document.getElementById('rating');
-    const scoreRing = document.getElementById('score-ring');
-    const scoreValue = document.getElementById('score-value');
-    const checklistEl = document.getElementById('checklist');
-    const suggestionsEl = document.getElementById('feedback-card').querySelector('.suggestions ul');
+const BOOKS = [
+  { id: 1342, title: "Pride and Prejudice", author: "Jane Austen" },
+  { id: 158, title: "Emma", author: "Jane Austen" },
+  { id: 161, title: "Sense and Sensibility", author: "Jane Austen" },
+  { id: 105, title: "Persuasion", author: "Jane Austen" },
+  { id: 1260, title: "Jane Eyre", author: "Charlotte Brontë" },
+  { id: 768, title: "Wuthering Heights", author: "Emily Brontë" },
+  { id: 1400, title: "Great Expectations", author: "Charles Dickens" },
+  { id: 98, title: "A Tale of Two Cities", author: "Charles Dickens" },
+  { id: 46, title: "A Christmas Carol", author: "Charles Dickens" },
+  { id: 2701, title: "Moby-Dick", author: "Herman Melville" },
+  { id: 74, title: "The Adventures of Tom Sawyer", author: "Mark Twain" },
+  { id: 76, title: "The Adventures of Huckleberry Finn", author: "Mark Twain" },
+  { id: 11, title: "Alice's Adventures in Wonderland", author: "Lewis Carroll" },
+  { id: 1524, title: "Hamlet", author: "William Shakespeare" },
+  { id: 1533, title: "Macbeth", author: "William Shakespeare" },
+  { id: 1513, title: "Romeo and Juliet", author: "William Shakespeare" },
+  { id: 1514, title: "A Midsummer Night's Dream", author: "William Shakespeare" },
+  { id: 844, title: "The Importance of Being Earnest", author: "Oscar Wilde" },
+  { id: 174, title: "The Picture of Dorian Gray", author: "Oscar Wilde" },
+  { id: 84, title: "Frankenstein", author: "Mary Shelley" },
+  { id: 345, title: "Dracula", author: "Bram Stoker" },
+  { id: 42, title: "The Strange Case of Dr Jekyll and Mr Hyde", author: "Robert Louis Stevenson" },
+  { id: 120, title: "Treasure Island", author: "Robert Louis Stevenson" },
+  { id: 219, title: "Heart of Darkness", author: "Joseph Conrad" },
+  { id: 55, title: "The Wonderful Wizard of Oz", author: "L. Frank Baum" },
+  { id: 521, title: "Robinson Crusoe", author: "Daniel Defoe" },
+  { id: 829, title: "Gulliver's Travels", author: "Jonathan Swift" },
+  { id: 33, title: "The Scarlet Letter", author: "Nathaniel Hawthorne" },
+  { id: 209, title: "The Turn of the Screw", author: "Henry James" },
+  { id: 160, title: "The Awakening", author: "Kate Chopin" },
+  { id: 1952, title: "The Yellow Wallpaper", author: "Charlotte Perkins Gilman" },
+  { id: 4517, title: "Ethan Frome", author: "Edith Wharton" },
+  { id: 541, title: "The Age of Innocence", author: "Edith Wharton" },
+  { id: 284, title: "The House of Mirth", author: "Edith Wharton" },
+  { id: 2600, title: "War and Peace", author: "Leo Tolstoy" },
+  { id: 1399, title: "Anna Karenina", author: "Leo Tolstoy" },
+  { id: 2554, title: "Crime and Punishment", author: "Fyodor Dostoevsky" },
+  { id: 28054, title: "The Brothers Karamazov", author: "Fyodor Dostoevsky" },
+  { id: 135, title: "Les Misérables", author: "Victor Hugo" },
+  { id: 1184, title: "The Count of Monte Cristo", author: "Alexandre Dumas" },
+  { id: 1257, title: "The Three Musketeers", author: "Alexandre Dumas" },
+  { id: 103, title: "Around the World in Eighty Days", author: "Jules Verne" },
+  { id: 164, title: "Twenty Thousand Leagues under the Sea", author: "Jules Verne" },
+  { id: 36, title: "The War of the Worlds", author: "H. G. Wells" },
+  { id: 35, title: "The Time Machine", author: "H. G. Wells" },
+  { id: 236, title: "The Jungle Book", author: "Rudyard Kipling" },
+  { id: 215, title: "The Call of the Wild", author: "Jack London" },
+  { id: 37106, title: "Little Women", author: "Louisa May Alcott" },
+  { id: 17396, title: "The Secret Garden", author: "Frances Hodgson Burnett" },
+  { id: 289, title: "The Wind in the Willows", author: "Kenneth Grahame" },
+  { id: 16, title: "Peter Pan", author: "J. M. Barrie" },
+  { id: 271, title: "Black Beauty", author: "Anna Sewell" },
+  { id: 82, title: "Ivanhoe", author: "Walter Scott" },
+  { id: 2765, title: "The Last of the Mohicans", author: "James Fenimore Cooper" },
+  { id: 60, title: "The Scarlet Pimpernel", author: "Baroness Orczy" },
+  { id: 1695, title: "The Man Who Was Thursday", author: "G. K. Chesterton" },
+  { id: 2413, title: "Madame Bovary", author: "Gustave Flaubert" },
+  { id: 1727, title: "The Odyssey", author: "Homer (Samuel Butler translation)" },
+  { id: 6130, title: "The Iliad", author: "Homer (Samuel Butler translation)" },
+  { id: 2383, title: "The Canterbury Tales", author: "Geoffrey Chaucer" },
+  { id: 2000, title: "Don Quixote", author: "Miguel de Cervantes (Ormsby translation)" },
+  { id: 15492, title: "A Doll's House", author: "Henrik Ibsen" },
+  { id: 2500, title: "Siddhartha", author: "Hermann Hesse" },
+];
 
-    const SHIMMER_HTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span><span></span></div>';
+let FALLBACK_PASSAGES = [];
 
-    // State
-    let currentPassage = null;
-    let currentFeedback = null;
+// ---------------------------------------------------------------------------
+// Text helpers
+// ---------------------------------------------------------------------------
 
-    function setLoading(isLoading) {
-        newPassageBtn.disabled = isLoading;
-        submitBtn.disabled = isLoading;
-        if (isLoading) {
-            passageBox.classList.add('is-loading');
-            passageBox.innerHTML = SHIMMER_HTML;
-        } else {
-            passageBox.classList.remove('is-loading');
-        }
+const START_RE = /\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*\*\*/is;
+const END_RE = /\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*\*\*/is;
+
+function countWords(text) {
+  const matches = text.match(/\b\w+\b/g);
+  return matches ? matches.length : 0;
+}
+
+function stripGutenbergBoilerplate(text) {
+  const start = START_RE.exec(text);
+  if (start) {
+    text = text.slice(start.index + start[0].length);
+  }
+  const end = END_RE.exec(text);
+  if (end) {
+    text = text.slice(0, end.index);
+  }
+  return text.trim();
+}
+
+function cleanParagraphs(text) {
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim().replace(/\s+/g, " "))
+    .filter((p) => p.length > 0);
+}
+
+function sentencesFromParagraph(p) {
+  return p
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function randomInt(max) {
+  return Math.floor(Math.random() * max);
+}
+
+function sample(array) {
+  return array[randomInt(array.length)];
+}
+
+function extractPassage(text, minWords = 100, maxWords = 200) {
+  const body = stripGutenbergBoilerplate(text);
+  if (!body) return null;
+
+  const paragraphs = cleanParagraphs(body);
+  const candidates = [];
+
+  // 1. Whole paragraphs that already fit the range.
+  for (const p of paragraphs) {
+    const wc = countWords(p);
+    if (minWords <= wc && wc <= maxWords) {
+      candidates.push(p);
     }
+  }
 
-    function countWords(text) {
-        return text.trim() ? text.trim().split(/\s+/).length : 0;
+  // 2. Merge a few short consecutive paragraphs.
+  for (let i = 0; i < paragraphs.length; i++) {
+    const merged = [];
+    let wc = 0;
+    for (let j = i; j < Math.min(i + 6, paragraphs.length); j++) {
+      merged.push(paragraphs[j]);
+      wc += countWords(paragraphs[j]);
+      if (minWords <= wc && wc <= maxWords) {
+        candidates.push(merged.join(" "));
+        break;
+      } else if (wc > maxWords) {
+        break;
+      }
     }
+  }
 
-    async function loadPassage() {
-        setLoading(true);
-        feedbackCard.classList.add('hidden');
-        try {
-            const res = await fetch('/api/random-passage');
-            if (!res.ok) throw new Error(`Server error: ${res.status}`);
-            const data = await res.json();
-            currentPassage = data;
-            currentFeedback = null;
-            renderPassage(data);
-        } catch (err) {
-            console.error(err);
-            passageBox.textContent = `Could not load a passage. ${err.message}`;
-            passageTitle.textContent = 'Error';
-            passageAuthor.textContent = '—';
-            passageWordCount.textContent = '— words';
-            sourceLink.href = 'https://www.gutenberg.org/';
-        } finally {
-            setLoading(false);
+  // 3. Sentence-window from a paragraph that is too long.
+  for (const p of paragraphs) {
+    if (countWords(p) > maxWords) {
+      const sentences = sentencesFromParagraph(p);
+      for (let start = 0; start < sentences.length; start++) {
+        const chunk = [];
+        let wc = 0;
+        for (const s of sentences.slice(start)) {
+          chunk.push(s);
+          wc += countWords(s);
+          if (minWords <= wc && wc <= maxWords) {
+            candidates.push(chunk.join(" "));
+            break;
+          } else if (wc > maxWords) {
+            break;
+          }
         }
+      }
     }
+  }
 
-    function renderPassage(data) {
-        // Small fade effect
-        passageBox.style.opacity = '0';
-        setTimeout(() => {
-            passageBox.textContent = data.passage;
-            passageTitle.textContent = data.title;
-            passageAuthor.textContent = data.author;
-            passageWordCount.textContent = `${data.word_count} words`;
-            sourceLink.href = data.source_url;
-            passageBox.style.opacity = '1';
-        }, 150);
+  if (candidates.length > 0) {
+    return sample(candidates);
+  }
+
+  // Final fallback: grab a random word window and trim to a sentence end.
+  const words = body.match(/\S+/g) || [];
+  if (words.length < minWords) return null;
+
+  const maxStart = Math.max(0, words.length - maxWords - 1);
+  const start = randomInt(maxStart + 1);
+  const window = words.slice(start, start + maxWords);
+  let joined = window.join(" ");
+
+  const ends = [". ", "! ", "? "]
+    .map((mark) => joined.lastIndexOf(mark))
+    .filter((idx) => idx !== -1);
+  const lastSentenceEnd = ends.length ? Math.max(...ends) : -1;
+
+  if (lastSentenceEnd > joined.length / 2) {
+    joined = joined.slice(0, lastSentenceEnd + 1);
+  }
+
+  const finalWc = countWords(joined);
+  if (minWords <= finalWc && finalWc <= maxWords) {
+    return joined;
+  }
+  return window.slice(0, Math.min(maxWords, window.length)).join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Fetching
+// ---------------------------------------------------------------------------
+
+const TEXT_CACHE = {};
+
+async function fetchBookText(bookId) {
+  if (TEXT_CACHE[bookId] !== undefined) {
+    return TEXT_CACHE[bookId];
+  }
+
+  const urls = [
+    `https://www.gutenberg.org/ebooks/${bookId}.txt.utf-8`,
+    `https://www.gutenberg.org/files/${bookId}/${bookId}-0.txt`,
+  ];
+
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, { headers: { "User-Agent": "LitPassagePractice/1.0" } });
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      if (text.length < 500) continue;
+      TEXT_CACHE[bookId] = text;
+      return text;
+    } catch (err) {
+      // Try next URL or fall through.
     }
+  }
 
-    async function submitFeedback() {
-        if (!currentPassage) {
-            alert('Please load a passage first.');
-            return;
-        }
-        const response = responseInput.value.trim();
-        if (!response) {
-            alert('Please write an analysis before submitting.');
-            responseInput.focus();
-            return;
-        }
+  TEXT_CACHE[bookId] = null;
+  return null;
+}
 
-        submitBtn.disabled = true;
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">⟳</span> Analyzing…';
-        try {
-            const res = await fetch('/api/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ passage: currentPassage.passage, response }),
-            });
-            if (!res.ok) throw new Error(`Server error: ${res.status}`);
-            const data = await res.json();
-            currentFeedback = data;
-            renderFeedback(data);
-        } catch (err) {
-            console.error(err);
-            alert('Could not get feedback. ' + err.message);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
-        }
+async function loadFallbackPassages() {
+  if (FALLBACK_PASSAGES.length > 0) return;
+  try {
+    const resp = await fetch("static/passages.json");
+    if (resp.ok) {
+      FALLBACK_PASSAGES = await resp.json();
     }
+  } catch (err) {
+    console.error("Failed to load fallback passages", err);
+    FALLBACK_PASSAGES = [];
+  }
+}
 
-    function renderFeedback(data) {
-        feedbackCard.classList.remove('hidden');
+async function getRandomPassage() {
+  await loadFallbackPassages();
 
-        ratingEl.textContent = data.rating;
-        scoreValue.textContent = `${data.passed}/${data.total}`;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const book = sample(BOOKS);
+    const text = await fetchBookText(book.id);
+    if (!text) continue;
 
-        const angle = (data.passed / data.total) * 360;
-        scoreRing.style.setProperty('--score-angle', `${angle}deg`);
-
-        // Color the ring and top border by rating
-        feedbackCard.style.borderTopColor = data.rating === 'Strong'
-            ? 'var(--success)'
-            : data.rating === 'Good'
-                ? 'var(--warning)'
-                : 'var(--danger)';
-
-        checklistEl.innerHTML = '';
-        let delay = 0;
-        for (const key of Object.keys(data.checks)) {
-            const item = data.checks[key];
-            const li = document.createElement('li');
-            li.className = item.passed ? 'pass' : 'fail';
-            li.style.animationDelay = `${delay}ms`;
-            li.innerHTML = `
-                <span class="check-icon" aria-hidden="true">${item.passed ? '✓' : '!'}</span>
-                <span class="check-label">${escapeHtml(item.label)}</span>
-            `;
-            checklistEl.appendChild(li);
-            delay += 80;
-        }
-
-        suggestionsEl.innerHTML = '';
-        for (const s of data.suggestions) {
-            const li = document.createElement('li');
-            li.textContent = s;
-            suggestionsEl.appendChild(li);
-        }
-
-        feedbackCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const passage = extractPassage(text);
+    if (passage) {
+      return {
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        source_url: `https://www.gutenberg.org/ebooks/${book.id}`,
+        passage,
+        word_count: countWords(passage),
+        fallback: false,
+      };
     }
+  }
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+  // Fallback
+  if (FALLBACK_PASSAGES.length === 0) {
+    return null;
+  }
+  const fb = sample(FALLBACK_PASSAGES);
+  return {
+    id: null,
+    title: fb.title,
+    author: fb.author,
+    source_url: "https://www.gutenberg.org/",
+    passage: fb.passage,
+    word_count: countWords(fb.passage),
+    fallback: true,
+  };
+}
 
-    function exportResponse() {
-        if (!currentPassage) {
-            alert('No passage to export. Load a passage first.');
-            return;
-        }
-        const response = responseInput.value.trim();
-        const format = exportFormat.value;
-        const timestamp = new Date().toISOString();
-        const filenameBase = `lit-passage-practice-${timestamp.slice(0, 10)}`;
+// ---------------------------------------------------------------------------
+// Feedback
+// ---------------------------------------------------------------------------
 
-        const payload = {
-            title: currentPassage.title,
-            author: currentPassage.author,
-            source_url: currentPassage.source_url,
-            passage: currentPassage.passage,
-            passage_word_count: currentPassage.word_count,
-            response,
-            response_word_count: countWords(response),
-            feedback: currentFeedback,
-            exported_at: timestamp,
-        };
+function evaluateFeedback(passage, response) {
+  const responseLower = response.toLowerCase();
+  const wc = countWords(response);
 
-        let blob;
-        let filename;
-        if (format === 'json') {
-            blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            filename = `${filenameBase}.json`;
-        } else {
-            const md = buildMarkdown(payload);
-            blob = new Blob([md], { type: 'text/markdown' });
-            filename = `${filenameBase}.md`;
-        }
+  const checks = {
+    length: {
+      label: "Response is at least 50 words",
+      passed: wc >= 50,
+    },
+    text_reference: {
+      label: "Refers to specific evidence from the passage",
+      passed: /["']|\b(?:line|passage|text|says|describes|shows|suggests|quotes|writes|states)\b/.test(responseLower),
+    },
+    device_or_theme: {
+      label: "Mentions a literary device, tone, or theme",
+      passed: /\b(?:metaphor|simile|imagery|symbol|theme|tone|irony|personification|foreshadowing|conflict|mood|diction|syntax|character|setting|narrator|perspective|point of view|alliteration)\b/.test(responseLower),
+    },
+    explanation: {
+      label: "Explains how the evidence supports an interpretation",
+      passed: /\b(?:because|shows|suggests|indicates|demonstrates|reveals|implies|creates|emphasizes|highlights|conveys|illustrates|represents|reflects|therefore|thus)\b/.test(responseLower),
+    },
+  };
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
+  const passed = Object.values(checks).filter((c) => c.passed).length;
+  const total = Object.keys(checks).length;
 
-    function buildMarkdown(payload) {
-        const fb = payload.feedback;
-        let md = `# Lit Passage Practice — Export\n\n`;
-        md += `**Exported:** ${payload.exported_at}\n\n`;
-        md += `## Passage\n\n**${payload.title}** by ${payload.author}\n\n`;
-        md += `Source: <${payload.source_url}>\n\n`;
-        md += `> ${payload.passage.replace(/\n/g, '\n> ')}\n\n`;
-        md += `*${payload.passage_word_count} words*\n\n`;
-        md += `## Your Analysis\n\n${payload.response || '*(No response entered.)*'}\n\n`;
-        md += `*${payload.response_word_count} words*\n\n`;
-        if (fb) {
-            md += `## Feedback\n\n**Rating:** ${fb.rating} (${fb.passed}/${fb.total})\n\n`;
-            md += `### Checklist\n\n`;
-            for (const key of Object.keys(fb.checks)) {
-                const item = fb.checks[key];
-                md += `- [${item.passed ? 'x' : ' '}] ${item.label}\n`;
-            }
-            md += `\n### Suggestions\n\n`;
-            for (const s of fb.suggestions) {
-                md += `- ${s}\n`;
-            }
-        }
-        return md;
-    }
+  let rating;
+  if (passed === total) rating = "Strong";
+  else if (passed >= total / 2) rating = "Good";
+  else rating = "Developing";
 
-    // Event listeners
-    newPassageBtn.addEventListener('click', loadPassage);
-    submitBtn.addEventListener('click', submitFeedback);
-    exportBtn.addEventListener('click', exportResponse);
+  const missing = Object.values(checks)
+    .filter((c) => !c.passed)
+    .map((c) => c.label);
 
-    responseInput.addEventListener('input', () => {
-        responseWordCount.textContent = `${countWords(responseInput.value)} words`;
-    });
+  const suggestions = [];
+  if (!checks.length.passed) {
+    suggestions.push("Try writing a bit more—aim for at least 50 words so you can develop your ideas.");
+  }
+  if (!checks.text_reference.passed) {
+    suggestions.push("Quote or paraphrase a specific line from the passage to ground your analysis.");
+  }
+  if (!checks.device_or_theme.passed) {
+    suggestions.push("Identify a literary device, tone, or theme the author is using.");
+  }
+  if (!checks.explanation.passed) {
+    suggestions.push("Explain why the evidence matters—what does it show about meaning or effect?");
+  }
+  if (suggestions.length === 0) {
+    suggestions.push("Great job! Your analysis covers the key elements of a strong response.");
+  }
 
-    // Load an initial passage on startup
-    loadPassage();
-})();
+  return {
+    response_word_count: wc,
+    checks,
+    passed,
+    total,
+    rating,
+    missing,
+    suggestions,
+    generated_at: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// UI helpers
+// ---------------------------------------------------------------------------
+
+const els = {
+  passageTitle: document.getElementById("passage-title"),
+  passageBox: document.getElementById("passage-box"),
+  passageAuthor: document.getElementById("passage-author"),
+  passageWordCount: document.getElementById("passage-word-count"),
+  sourceLink: document.getElementById("source-link"),
+  newPassageBtn: document.getElementById("new-passage-btn"),
+  responseInput: document.getElementById("response-input"),
+  responseWordCount: document.getElementById("response-word-count"),
+  submitBtn: document.getElementById("submit-btn"),
+  exportBtn: document.getElementById("export-btn"),
+  exportFormat: document.getElementById("export-format"),
+  feedbackCard: document.getElementById("feedback-card"),
+  scoreValue: document.getElementById("score-value"),
+  rating: document.getElementById("rating"),
+  checklist: document.getElementById("checklist"),
+  suggestions: document.getElementById("suggestions"),
+};
+
+let currentPassage = null;
+let currentFeedback = null;
+
+function setLoading(isLoading) {
+  els.newPassageBtn.disabled = isLoading;
+  if (isLoading) {
+    els.passageBox.innerHTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span></div>';
+  }
+}
+
+function renderPassage(data) {
+  if (!data) {
+    els.passageTitle.textContent = "Couldn't load a passage";
+    els.passageBox.textContent = "Please check your internet connection and try again.";
+    els.passageAuthor.textContent = "—";
+    els.passageWordCount.textContent = "— words";
+    els.sourceLink.href = "#";
+    currentPassage = null;
+    return;
+  }
+
+  currentPassage = data;
+  els.passageTitle.textContent = data.title;
+  els.passageBox.textContent = data.passage;
+  els.passageAuthor.textContent = data.author;
+  els.passageWordCount.textContent = `${data.word_count} words`;
+  els.sourceLink.href = data.source_url;
+}
+
+function renderFeedback(result) {
+  currentFeedback = result;
+  els.feedbackCard.classList.remove("hidden");
+  els.scoreValue.textContent = `${result.passed}/${result.total}`;
+  els.rating.textContent = result.rating;
+
+  els.checklist.innerHTML = "";
+  for (const check of Object.values(result.checks)) {
+    const li = document.createElement("li");
+    li.className = check.passed ? "check-pass" : "check-fail";
+    li.textContent = `${check.passed ? "✓" : "✗"} ${check.label}`;
+    els.checklist.appendChild(li);
+  }
+
+  const ul = els.suggestions.querySelector("ul");
+  ul.innerHTML = "";
+  for (const suggestion of result.suggestions) {
+    const li = document.createElement("li");
+    li.textContent = suggestion;
+    ul.appendChild(li);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
+function downloadBlob(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportMarkdown() {
+  if (!currentPassage || !currentFeedback) return;
+  const lines = [
+    `# ${currentPassage.title}`,
+    "",
+    `**Author:** ${currentPassage.author}`,
+    `**Source:** ${currentPassage.source_url}`,
+    `**Word count:** ${currentPassage.word_count}`,
+    "",
+    "> " + currentPassage.passage.replace(/\n/g, "\n> "),
+    "",
+    "## Analysis",
+    "",
+    els.responseInput.value,
+    "",
+    "## Feedback",
+    "",
+    `**Rating:** ${currentFeedback.rating} (${currentFeedback.passed}/${currentFeedback.total})`,
+    "",
+    "### Checks",
+    "",
+    ...Object.values(currentFeedback.checks).map((c) => `- [${c.passed ? "x" : " "}] ${c.label}`),
+    "",
+    "### Suggestions",
+    "",
+    ...currentFeedback.suggestions.map((s) => `- ${s}`),
+    "",
+    `_Exported at ${currentFeedback.generated_at}_`,
+  ];
+  downloadBlob(`${currentPassage.title.replace(/\s+/g, "_")}_analysis.md`, lines.join("\n"), "text/markdown");
+}
+
+function exportJson() {
+  if (!currentPassage || !currentFeedback) return;
+  const payload = {
+    passage: currentPassage,
+    response: els.responseInput.value,
+    feedback: currentFeedback,
+  };
+  downloadBlob(`${currentPassage.title.replace(/\s+/g, "_")}_analysis.json`, JSON.stringify(payload, null, 2), "application/json");
+}
+
+// ---------------------------------------------------------------------------
+// Event wiring
+// ---------------------------------------------------------------------------
+
+async function loadNewPassage() {
+  setLoading(true);
+  els.feedbackCard.classList.add("hidden");
+  els.responseInput.value = "";
+  els.responseWordCount.textContent = "0 words";
+  currentFeedback = null;
+  const data = await getRandomPassage();
+  renderPassage(data);
+  setLoading(false);
+}
+
+function handleSubmit() {
+  if (!currentPassage) return;
+  const response = els.responseInput.value.trim();
+  if (!response) {
+    alert("Write a short analysis before submitting.");
+    return;
+  }
+  const result = evaluateFeedback(currentPassage.passage, response);
+  renderFeedback(result);
+}
+
+function handleExport() {
+  const format = els.exportFormat.value;
+  if (format === "markdown") {
+    exportMarkdown();
+  } else {
+    exportJson();
+  }
+}
+
+function init() {
+  els.newPassageBtn.addEventListener("click", loadNewPassage);
+  els.submitBtn.addEventListener("click", handleSubmit);
+  els.exportBtn.addEventListener("click", handleExport);
+
+  els.responseInput.addEventListener("input", () => {
+    const wc = countWords(els.responseInput.value);
+    els.responseWordCount.textContent = `${wc} word${wc === 1 ? "" : "s"}`;
+  });
+
+  loadNewPassage();
+}
+
+init();
