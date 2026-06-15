@@ -362,7 +362,7 @@ async function getRandomPassage() {
 // Feedback
 // ---------------------------------------------------------------------------
 
-function evaluateFeedback(response) {
+function evaluateFeedback(passage, response) {
   const responseLower = response.toLowerCase();
   const wc = countWords(response);
 
@@ -454,6 +454,7 @@ const els = {
 let currentPassage = null;
 let currentFeedback = null;
 let currentResponse = "";
+let currentLoadId = 0;
 let renderPassageTimeout = null;
 
 const SHIMMER_HTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span><span></span></div>';
@@ -577,7 +578,7 @@ function exportMarkdown() {
     "",
     "## Analysis",
     "",
-    els.responseInput.value.trim() || currentResponse || "(No analysis submitted)",
+    (currentFeedback ? currentResponse : els.responseInput.value.trim()) || "(No analysis submitted)",
   ];
 
   if (currentFeedback) {
@@ -608,7 +609,7 @@ function exportJson() {
   if (!currentPassage) return;
   const payload = {
     passage: currentPassage,
-    response: els.responseInput.value.trim() || currentResponse,
+    response: currentFeedback ? currentResponse : els.responseInput.value.trim(),
   };
   if (currentFeedback) {
     payload.feedback = currentFeedback;
@@ -621,6 +622,9 @@ function exportJson() {
 // ---------------------------------------------------------------------------
 
 async function loadNewPassage() {
+  currentLoadId += 1;
+  const loadId = currentLoadId;
+
   setLoading(true);
   els.feedbackCard.classList.add("hidden");
   els.submitWarning.classList.add("hidden");
@@ -628,14 +632,19 @@ async function loadNewPassage() {
   els.responseWordCount.textContent = "0 words";
   currentFeedback = null;
   currentResponse = "";
+
   try {
     const data = await getRandomPassage();
+    if (loadId !== currentLoadId) return;
     renderPassage(data);
   } catch (err) {
     console.error("Failed to load passage", err);
+    if (loadId !== currentLoadId) return;
     renderPassage(null);
   } finally {
-    setLoading(false);
+    if (loadId === currentLoadId) {
+      setLoading(false);
+    }
   }
 }
 
@@ -657,7 +666,7 @@ function handleSubmit() {
   els.submitBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">⟳</span> Analyzing…';
 
   try {
-    const result = evaluateFeedback(response);
+    const result = evaluateFeedback(currentPassage.passage, response);
     currentResponse = response;
     renderFeedback(result);
   } finally {
