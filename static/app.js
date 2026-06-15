@@ -306,10 +306,13 @@ async function loadFallbackPassages() {
   FALLBACK_PASSAGES = [];
 }
 
-async function getRandomPassage() {
+async function getRandomPassage(signal) {
   await loadFallbackPassages();
 
   const budgetController = new AbortController();
+  if (signal) {
+    signal.addEventListener("abort", () => budgetController.abort(), { once: true });
+  }
   const budgetTimeoutId = setTimeout(() => budgetController.abort(), 6000);
   const attempted = new Set();
 
@@ -455,6 +458,7 @@ let currentPassage = null;
 let currentFeedback = null;
 let currentResponse = "";
 let currentLoadId = 0;
+let activeLoadController = null;
 let renderPassageTimeout = null;
 
 const SHIMMER_HTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span><span></span></div>';
@@ -625,6 +629,12 @@ async function loadNewPassage() {
   currentLoadId += 1;
   const loadId = currentLoadId;
 
+  if (activeLoadController) {
+    activeLoadController.abort();
+  }
+  activeLoadController = new AbortController();
+  const loadSignal = activeLoadController.signal;
+
   setLoading(true);
   els.feedbackCard.classList.add("hidden");
   els.submitWarning.classList.add("hidden");
@@ -634,16 +644,18 @@ async function loadNewPassage() {
   currentResponse = "";
 
   try {
-    const data = await getRandomPassage();
+    const data = await getRandomPassage(loadSignal);
     if (loadId !== currentLoadId) return;
     renderPassage(data);
   } catch (err) {
+    if (err.name === "AbortError") return;
     console.error("Failed to load passage", err);
     if (loadId !== currentLoadId) return;
     renderPassage(null);
   } finally {
     if (loadId === currentLoadId) {
       setLoading(false);
+      activeLoadController = null;
     }
   }
 }
