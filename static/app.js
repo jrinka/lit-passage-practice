@@ -244,6 +244,23 @@ async function fetchBookText(bookId) {
 
 async function loadFallbackPassages() {
   if (FALLBACK_PASSAGES.length > 0) return;
+
+  // First, try to read inline fallback embedded in the HTML.
+  // This works when the page is opened directly from the filesystem (file://),
+  // where fetch() is blocked in some browsers.
+  const inline = document.getElementById("fallback-passages");
+  if (inline) {
+    try {
+      FALLBACK_PASSAGES = JSON.parse(inline.textContent);
+      if (Array.isArray(FALLBACK_PASSAGES) && FALLBACK_PASSAGES.length > 0) {
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to parse inline fallback passages", err);
+    }
+  }
+
+  // Fall back to fetching the JSON file (useful when served over HTTP).
   try {
     const resp = await fetch("static/passages.json");
     if (resp.ok) {
@@ -401,6 +418,12 @@ function setLoading(isLoading) {
 }
 
 function renderPassage(data) {
+  if (!data) {
+    currentPassage = null;
+  } else {
+    currentPassage = data;
+  }
+
   els.passageBox.style.opacity = '0';
   setTimeout(() => {
     if (!data) {
@@ -409,9 +432,7 @@ function renderPassage(data) {
       els.passageAuthor.textContent = "—";
       els.passageWordCount.textContent = "— words";
       els.sourceLink.href = "#";
-      currentPassage = null;
     } else {
-      currentPassage = data;
       els.passageTitle.textContent = data.title;
       els.passageBox.textContent = data.passage;
       els.passageAuthor.textContent = data.author;
