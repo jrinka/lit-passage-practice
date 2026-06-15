@@ -304,11 +304,17 @@ async function getRandomPassage() {
 
   const budgetController = new AbortController();
   const budgetTimeoutId = setTimeout(() => budgetController.abort(), 6000);
+  const attempted = new Set();
 
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < Math.min(10, BOOKS.length); attempt++) {
     if (budgetController.signal.aborted) break;
 
-    const book = sample(BOOKS);
+    const remaining = BOOKS.filter((b) => !attempted.has(b.id));
+    if (remaining.length === 0) break;
+
+    const book = sample(remaining);
+    attempted.add(book.id);
+
     const text = await fetchBookText(book.id, budgetController.signal);
     if (!text) continue;
 
