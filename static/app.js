@@ -225,32 +225,33 @@ async function fetchBookText(bookId, signal) {
     const controller = new AbortController();
     const perUrlTimeoutId = setTimeout(() => controller.abort(), 3000);
 
-    // If an outer signal is provided, abort when it aborts.
+    let outerAbortHandler;
     if (signal) {
-      signal.addEventListener("abort", () => controller.abort(), { once: true });
+      outerAbortHandler = () => controller.abort();
+      signal.addEventListener("abort", outerAbortHandler, { once: true });
     }
 
     try {
       const resp = await fetch(url, { signal: controller.signal });
       clearTimeout(perUrlTimeoutId);
+      if (signal && outerAbortHandler) {
+        signal.removeEventListener("abort", outerAbortHandler);
+      }
       if (!resp.ok) continue;
       const text = await resp.text();
       if (text.length < 500) continue;
       TEXT_CACHE[bookId] = text;
-      // Cap cache size to prevent unbounded memory growth.
-      if (Object.keys(TEXT_CACHE).length > 10) {
-        Object.keys(TEXT_CACHE).forEach((key) => {
-          if (Number(key) !== bookId) delete TEXT_CACHE[key];
-        });
-      }
       return text;
     } catch (err) {
       clearTimeout(perUrlTimeoutId);
-      if (err.name === "AbortError") {
-        // Outer budget exhausted; stop trying.
+      if (signal && outerAbortHandler) {
+        signal.removeEventListener("abort", outerAbortHandler);
+      }
+      if (signal && signal.aborted) {
+        // Outer budget exhausted; stop trying this book.
         return null;
       }
-      // Try next URL or fall through.
+      // Otherwise this was a per-URL timeout or network error; try next URL.
     }
   }
 
