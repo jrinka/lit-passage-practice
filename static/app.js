@@ -223,7 +223,7 @@ async function fetchBookText(bookId, signal) {
 
   for (const url of urls) {
     const controller = new AbortController();
-    const perUrlTimeoutId = setTimeout(() => controller.abort(), 8000);
+    const perUrlTimeoutId = setTimeout(() => controller.abort(), 3000);
 
     // If an outer signal is provided, abort when it aborts.
     if (signal) {
@@ -237,6 +237,12 @@ async function fetchBookText(bookId, signal) {
       const text = await resp.text();
       if (text.length < 500) continue;
       TEXT_CACHE[bookId] = text;
+      // Cap cache size to prevent unbounded memory growth.
+      if (Object.keys(TEXT_CACHE).length > 10) {
+        Object.keys(TEXT_CACHE).forEach((key) => {
+          if (Number(key) !== bookId) delete TEXT_CACHE[key];
+        });
+      }
       return text;
     } catch (err) {
       clearTimeout(perUrlTimeoutId);
@@ -514,10 +520,18 @@ function renderFeedback(result) {
     const li = document.createElement("li");
     li.className = check.passed ? "pass" : "fail";
     li.style.animationDelay = `${delay}ms`;
-    li.innerHTML = `
-      <span class="check-icon" aria-hidden="true">${check.passed ? "✓" : "!"}</span>
-      <span class="check-label">${escapeHtml(check.label)}</span>
-    `;
+
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "check-icon";
+    iconSpan.setAttribute("aria-hidden", "true");
+    iconSpan.textContent = check.passed ? "✓" : "!";
+
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "check-label";
+    labelSpan.textContent = check.label;
+
+    li.appendChild(iconSpan);
+    li.appendChild(labelSpan);
     els.checklist.appendChild(li);
     delay += 80;
   }
@@ -531,12 +545,6 @@ function renderFeedback(result) {
   }
 
   els.feedbackCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
 }
 
 // ---------------------------------------------------------------------------
@@ -568,7 +576,7 @@ function exportMarkdown() {
     "",
     "## Analysis",
     "",
-    currentResponse || els.responseInput.value.trim() || "(No analysis submitted)",
+    els.responseInput.value.trim() || currentResponse || "(No analysis submitted)",
   ];
 
   if (currentFeedback) {
@@ -599,7 +607,7 @@ function exportJson() {
   if (!currentPassage) return;
   const payload = {
     passage: currentPassage,
-    response: currentResponse || els.responseInput.value.trim(),
+    response: els.responseInput.value.trim() || currentResponse,
   };
   if (currentFeedback) {
     payload.feedback = currentFeedback;
@@ -619,9 +627,15 @@ async function loadNewPassage() {
   els.responseWordCount.textContent = "0 words";
   currentFeedback = null;
   currentResponse = "";
-  const data = await getRandomPassage();
-  renderPassage(data);
-  setLoading(false);
+  try {
+    const data = await getRandomPassage();
+    renderPassage(data);
+  } catch (err) {
+    console.error("Failed to load passage", err);
+    renderPassage(null);
+  } finally {
+    setLoading(false);
+  }
 }
 
 function handleSubmit() {
