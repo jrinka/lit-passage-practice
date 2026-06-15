@@ -263,9 +263,26 @@ function isValidPassage(p) {
 async function loadFallbackPassages() {
   if (FALLBACK_PASSAGES.length > 0) return;
 
-  // First, try to read inline fallback embedded in the HTML.
-  // This works when the page is opened directly from the filesystem (file://),
-  // where fetch() is blocked in some browsers.
+  // When served over HTTP, prefer the external JSON file so it can be updated
+  // without editing the HTML. When opened from the filesystem (file://), fetch()
+  // is blocked in some browsers, so fall back to the inline script block.
+  const isFileProtocol = window.location.protocol === "file:";
+
+  if (!isFileProtocol) {
+    try {
+      const resp = await fetch("static/passages.json");
+      if (resp.ok) {
+        const parsed = await resp.json();
+        if (Array.isArray(parsed)) {
+          FALLBACK_PASSAGES = parsed.filter(isValidPassage);
+          if (FALLBACK_PASSAGES.length > 0) return;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch fallback passages", err);
+    }
+  }
+
   const inline = document.getElementById("fallback-passages");
   if (inline) {
     try {
@@ -279,19 +296,7 @@ async function loadFallbackPassages() {
     }
   }
 
-  // Fall back to fetching the JSON file (useful when served over HTTP).
-  try {
-    const resp = await fetch("static/passages.json");
-    if (resp.ok) {
-      const parsed = await resp.json();
-      if (Array.isArray(parsed)) {
-        FALLBACK_PASSAGES = parsed.filter(isValidPassage);
-      }
-    }
-  } catch (err) {
-    console.error("Failed to load fallback passages", err);
-    FALLBACK_PASSAGES = [];
-  }
+  FALLBACK_PASSAGES = [];
 }
 
 async function getRandomPassage() {
@@ -435,6 +440,7 @@ const els = {
 
 let currentPassage = null;
 let currentFeedback = null;
+let currentResponse = "";
 let renderPassageTimeout = null;
 
 const SHIMMER_HTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span><span></span></div>';
@@ -544,7 +550,7 @@ function downloadBlob(filename, content, type) {
 }
 
 function exportMarkdown() {
-  if (!currentPassage || !currentFeedback) return;
+  if (!currentPassage) return;
   const lines = [
     `# ${currentPassage.title}`,
     "",
@@ -556,33 +562,42 @@ function exportMarkdown() {
     "",
     "## Analysis",
     "",
-    currentFeedback.submitted_response,
-    "",
-    "## Feedback",
-    "",
-    `**Rating:** ${currentFeedback.rating} (${currentFeedback.passed}/${currentFeedback.total})`,
-    "",
-    "### Checks",
-    "",
-    ...Object.values(currentFeedback.checks).map((c) => `- [${c.passed ? "x" : " "}] ${c.label}`),
-    "",
-    "### Suggestions",
-    "",
-    ...currentFeedback.suggestions.map((s) => `- ${s}`),
-    "",
-    `_Exported at ${currentFeedback.generated_at}_`,
+    currentResponse || "(No analysis submitted)",
   ];
+
+  if (currentFeedback) {
+    lines.push(
+      "",
+      "## Feedback",
+      "",
+      `**Rating:** ${currentFeedback.rating} (${currentFeedback.passed}/${currentFeedback.total})`,
+      "",
+      "### Checks",
+      "",
+      ...Object.values(currentFeedback.checks).map((c) => `- [${c.passed ? "x" : " "}] ${c.label}`),
+      "",
+      "### Suggestions",
+      "",
+      ...currentFeedback.suggestions.map((s) => `- ${s}`),
+      "",
+      `_Exported at ${currentFeedback.generated_at}_`
+    );
+  } else {
+    lines.push("", "_No feedback submitted yet._");
+  }
+
   downloadBlob(`${currentPassage.title.replace(/\s+/g, "_")}_analysis.md`, lines.join("\n"), "text/markdown");
 }
 
 function exportJson() {
-  if (!currentPassage || !currentFeedback) return;
-  const { submitted_response, ...feedbackForExport } = currentFeedback;
+  if (!currentPassage) return;
   const payload = {
     passage: currentPassage,
-    response: submitted_response,
-    feedback: feedbackForExport,
+    response: currentResponse || "",
   };
+  if (currentFeedback) {
+    payload.feedback = currentFeedback;
+  }
   downloadBlob(`${currentPassage.title.replace(/\s+/g, "_")}_analysis.json`, JSON.stringify(payload, null, 2), "application/json");
 }
 
@@ -597,6 +612,7 @@ async function loadNewPassage() {
   els.responseInput.value = "";
   els.responseWordCount.textContent = "0 words";
   currentFeedback = null;
+  currentResponse = "";
   const data = await getRandomPassage();
   renderPassage(data);
   setLoading(false);
@@ -613,6 +629,7 @@ function handleSubmit() {
     els.responseInput.focus();
     return;
   }
+  els.submitWarning.classList.add("hidden");
 
   els.submitBtn.disabled = true;
   const originalText = els.submitBtn.innerHTML;
@@ -621,7 +638,7 @@ function handleSubmit() {
   setTimeout(() => {
     try {
       const result = evaluateFeedback(response);
-      result.submitted_response = response;
+      currentResponse = response;
       renderFeedback(result);
     } finally {
       els.submitBtn.disabled = false;
@@ -633,10 +650,6 @@ function handleSubmit() {
 function handleExport() {
   if (!currentPassage) {
     alert("No passage to export. Load a passage first.");
-    return;
-  }
-  if (!currentFeedback) {
-    alert("Submit your analysis for feedback before exporting.");
     return;
   }
   const format = els.exportFormat.value;
