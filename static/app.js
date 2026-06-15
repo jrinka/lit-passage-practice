@@ -211,7 +211,7 @@ function extractPassage(text, minWords = 100, maxWords = 200) {
 
 const TEXT_CACHE = {};
 
-async function fetchBookText(bookId) {
+async function fetchBookText(bookId, signal) {
   if (TEXT_CACHE[bookId] !== undefined) {
     return TEXT_CACHE[bookId];
   }
@@ -223,17 +223,27 @@ async function fetchBookText(bookId) {
 
   for (const url of urls) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const perUrlTimeoutId = setTimeout(() => controller.abort(), 8000);
+
+    // If an outer signal is provided, abort when it aborts.
+    if (signal) {
+      signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+
     try {
       const resp = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
+      clearTimeout(perUrlTimeoutId);
       if (!resp.ok) continue;
       const text = await resp.text();
       if (text.length < 500) continue;
       TEXT_CACHE[bookId] = text;
       return text;
     } catch (err) {
-      clearTimeout(timeoutId);
+      clearTimeout(perUrlTimeoutId);
+      if (err.name === "AbortError") {
+        // Outer budget exhausted; stop trying.
+        return null;
+      }
       // Try next URL or fall through.
     }
   }
@@ -287,18 +297,19 @@ async function loadFallbackPassages() {
 async function getRandomPassage() {
   await loadFallbackPassages();
 
-  const startTime = Date.now();
-  const budgetMs = 6000;
+  const budgetController = new AbortController();
+  const budgetTimeoutId = setTimeout(() => budgetController.abort(), 6000);
 
   for (let attempt = 0; attempt < 10; attempt++) {
-    if (Date.now() - startTime > budgetMs) break;
+    if (budgetController.signal.aborted) break;
 
     const book = sample(BOOKS);
-    const text = await fetchBookText(book.id);
+    const text = await fetchBookText(book.id, budgetController.signal);
     if (!text) continue;
 
     const passage = extractPassage(text);
     if (passage) {
+      clearTimeout(budgetTimeoutId);
       return {
         id: book.id,
         title: book.title,
@@ -310,6 +321,8 @@ async function getRandomPassage() {
       };
     }
   }
+
+  clearTimeout(budgetTimeoutId);
 
   // Fallback
   if (FALLBACK_PASSAGES.length === 0) {
@@ -424,12 +437,15 @@ let currentPassage = null;
 let currentFeedback = null;
 let renderPassageTimeout = null;
 
+const SHIMMER_HTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span><span></span></div>';
+
 function setLoading(isLoading) {
   els.newPassageBtn.disabled = isLoading;
   els.submitBtn.disabled = isLoading;
   if (isLoading) {
+    els.passageBox.style.opacity = "1";
     els.passageBox.classList.add("is-loading");
-    els.passageBox.innerHTML = '<div class="shimmer" id="passage-shimmer"><span></span><span></span><span></span><span></span></div>';
+    els.passageBox.innerHTML = SHIMMER_HTML;
   } else {
     els.passageBox.classList.remove("is-loading");
   }
@@ -444,6 +460,7 @@ function renderPassage(data) {
   if (!data) {
     currentPassage = null;
     els.passageTitle.textContent = "Couldn't load a passage";
+    els.passageBox.style.opacity = "1";
     els.passageBox.textContent = "Please check your internet connection and try again.";
     els.passageAuthor.textContent = "—";
     els.passageWordCount.textContent = "— words";
