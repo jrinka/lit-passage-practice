@@ -222,14 +222,18 @@ async function fetchBookText(bookId) {
   ];
 
   for (const url of urls) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     try {
-      const resp = await fetch(url);
+      const resp = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!resp.ok) continue;
       const text = await resp.text();
       if (text.length < 500) continue;
       TEXT_CACHE[bookId] = text;
       return text;
     } catch (err) {
+      clearTimeout(timeoutId);
       // Try next URL or fall through.
     }
   }
@@ -370,6 +374,7 @@ const els = {
   newPassageBtn: document.getElementById("new-passage-btn"),
   responseInput: document.getElementById("response-input"),
   responseWordCount: document.getElementById("response-word-count"),
+  submitWarning: document.getElementById("submit-warning"),
   submitBtn: document.getElementById("submit-btn"),
   exportBtn: document.getElementById("export-btn"),
   exportFormat: document.getElementById("export-format"),
@@ -476,7 +481,7 @@ function downloadBlob(filename, content, type) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function exportMarkdown() {
@@ -492,7 +497,7 @@ function exportMarkdown() {
     "",
     "## Analysis",
     "",
-    els.responseInput.value,
+    currentFeedback.submitted_response,
     "",
     "## Feedback",
     "",
@@ -515,7 +520,7 @@ function exportJson() {
   if (!currentPassage || !currentFeedback) return;
   const payload = {
     passage: currentPassage,
-    response: els.responseInput.value,
+    response: currentFeedback.submitted_response,
     feedback: currentFeedback,
   };
   downloadBlob(`${currentPassage.title.replace(/\s+/g, "_")}_analysis.json`, JSON.stringify(payload, null, 2), "application/json");
@@ -528,6 +533,7 @@ function exportJson() {
 async function loadNewPassage() {
   setLoading(true);
   els.feedbackCard.classList.add("hidden");
+  els.submitWarning.classList.add("hidden");
   els.responseInput.value = "";
   els.responseWordCount.textContent = "0 words";
   currentFeedback = null;
@@ -543,7 +549,8 @@ function handleSubmit() {
   }
   const response = els.responseInput.value.trim();
   if (!response) {
-    alert("Write a short analysis before submitting.");
+    els.submitWarning.classList.remove("hidden");
+    els.responseInput.focus();
     return;
   }
 
@@ -554,6 +561,7 @@ function handleSubmit() {
   setTimeout(() => {
     try {
       const result = evaluateFeedback(response);
+      result.submitted_response = response;
       renderFeedback(result);
     } finally {
       els.submitBtn.disabled = false;
@@ -572,10 +580,15 @@ function handleExport() {
     return;
   }
   const format = els.exportFormat.value;
-  if (format === "markdown") {
-    exportMarkdown();
-  } else {
-    exportJson();
+  try {
+    if (format === "markdown") {
+      exportMarkdown();
+    } else {
+      exportJson();
+    }
+  } catch (err) {
+    console.error("Export failed", err);
+    alert("Could not export your response. Please try again.");
   }
 }
 
@@ -585,6 +598,7 @@ function init() {
   els.exportBtn.addEventListener("click", handleExport);
 
   els.responseInput.addEventListener("input", () => {
+    els.submitWarning.classList.add("hidden");
     const wc = countWords(els.responseInput.value);
     els.responseWordCount.textContent = `${wc} word${wc === 1 ? "" : "s"}`;
   });

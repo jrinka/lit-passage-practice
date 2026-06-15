@@ -356,6 +356,16 @@ body {
     display: none;
 }
 
+.feedback-warning {
+    color: var(--danger, #c0392b);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.feedback-warning.hidden {
+    display: none;
+}
+
 .feedback-header {
     display: flex;
     align-items: center;
