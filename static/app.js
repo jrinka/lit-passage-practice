@@ -562,7 +562,7 @@ function exportMarkdown() {
     "",
     "## Analysis",
     "",
-    currentResponse || "(No analysis submitted)",
+    currentResponse || els.responseInput.value.trim() || "(No analysis submitted)",
   ];
 
   if (currentFeedback) {
@@ -593,7 +593,7 @@ function exportJson() {
   if (!currentPassage) return;
   const payload = {
     passage: currentPassage,
-    response: currentResponse || "",
+    response: currentResponse || els.responseInput.value.trim(),
   };
   if (currentFeedback) {
     payload.feedback = currentFeedback;
@@ -631,20 +631,18 @@ function handleSubmit() {
   }
   els.submitWarning.classList.add("hidden");
 
-  els.submitBtn.disabled = true;
   const originalText = els.submitBtn.innerHTML;
+  els.submitBtn.disabled = true;
   els.submitBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">⟳</span> Analyzing…';
 
-  setTimeout(() => {
-    try {
-      const result = evaluateFeedback(response);
-      currentResponse = response;
-      renderFeedback(result);
-    } finally {
-      els.submitBtn.disabled = false;
-      els.submitBtn.innerHTML = originalText;
-    }
-  }, 0);
+  try {
+    const result = evaluateFeedback(response);
+    currentResponse = response;
+    renderFeedback(result);
+  } finally {
+    els.submitBtn.disabled = false;
+    els.submitBtn.innerHTML = originalText;
+  }
 }
 
 function handleExport() {

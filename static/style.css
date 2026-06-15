@@ -180,6 +180,7 @@ body {
 .shimmer span:nth-child(1) { width: 100%; }
 .shimmer span:nth-child(2) { width: 92%; }
 .shimmer span:nth-child(3) { width: 76%; }
+.shimmer span:nth-child(4) { width: 55%; }
 
 @keyframes shimmer {
     0% { background-position: 200% 0; }
