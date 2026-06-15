@@ -287,7 +287,12 @@ async function loadFallbackPassages() {
 async function getRandomPassage() {
   await loadFallbackPassages();
 
+  const startTime = Date.now();
+  const budgetMs = 6000;
+
   for (let attempt = 0; attempt < 10; attempt++) {
+    if (Date.now() - startTime > budgetMs) break;
+
     const book = sample(BOOKS);
     const text = await fetchBookText(book.id);
     if (!text) continue;
@@ -438,26 +443,23 @@ function renderPassage(data) {
 
   if (!data) {
     currentPassage = null;
-  } else {
-    currentPassage = data;
+    els.passageTitle.textContent = "Couldn't load a passage";
+    els.passageBox.textContent = "Please check your internet connection and try again.";
+    els.passageAuthor.textContent = "—";
+    els.passageWordCount.textContent = "— words";
+    els.sourceLink.href = "https://www.gutenberg.org/";
+    return;
   }
 
+  currentPassage = data;
   els.passageBox.style.opacity = '0';
   renderPassageTimeout = setTimeout(() => {
     renderPassageTimeout = null;
-    if (!data) {
-      els.passageTitle.textContent = "Couldn't load a passage";
-      els.passageBox.textContent = "Please check your internet connection and try again.";
-      els.passageAuthor.textContent = "—";
-      els.passageWordCount.textContent = "— words";
-      els.sourceLink.href = "#";
-    } else {
-      els.passageTitle.textContent = data.title;
-      els.passageBox.textContent = data.passage;
-      els.passageAuthor.textContent = data.author;
-      els.passageWordCount.textContent = `${data.word_count} words`;
-      els.sourceLink.href = data.source_url;
-    }
+    els.passageTitle.textContent = data.title;
+    els.passageBox.textContent = data.passage;
+    els.passageAuthor.textContent = data.author;
+    els.passageWordCount.textContent = `${data.word_count} words`;
+    els.sourceLink.href = data.source_url;
     els.passageBox.style.opacity = '1';
   }, 150);
 }
@@ -521,7 +523,7 @@ function downloadBlob(filename, content, type) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 function exportMarkdown() {
@@ -558,10 +560,11 @@ function exportMarkdown() {
 
 function exportJson() {
   if (!currentPassage || !currentFeedback) return;
+  const { submitted_response, ...feedbackForExport } = currentFeedback;
   const payload = {
     passage: currentPassage,
-    response: currentFeedback.submitted_response,
-    feedback: currentFeedback,
+    response: submitted_response,
+    feedback: feedbackForExport,
   };
   downloadBlob(`${currentPassage.title.replace(/\s+/g, "_")}_analysis.json`, JSON.stringify(payload, null, 2), "application/json");
 }
