@@ -86,7 +86,7 @@ const START_RE = /\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*\*\
 const END_RE = /\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*\*\*/is;
 
 function countWords(text) {
-  const matches = text.match(/\b\w+\b/g);
+  const matches = String(text ?? "").match(/\b\w+\b/g);
   return matches ? matches.length : 0;
 }
 
@@ -202,7 +202,7 @@ function extractPassage(text, minWords = 100, maxWords = 200) {
   if (minWords <= finalWc && finalWc <= maxWords) {
     return joined;
   }
-  return null;
+  return window.slice(0, Math.min(maxWords, window.length)).join(" ");
 }
 
 // ---------------------------------------------------------------------------
